@@ -1,0 +1,23 @@
+🧮 Sistema de Gerenciamento de Estoque - Pedro Lima Lopes
+Este é um aplicativo desktop desenvolvido com Python e Tkinter para realizar o gerenciamento completo de um estoque de produtos. Ele permite que o usuário:
+
+✅ Adicione novos produtos ao banco de dados
+🗑️ Remova produtos existentes
+🔄 Atualize o estoque com entradas e saídas
+📋 Visualize todos os produtos em uma interface gráfica com tabela (Treeview)
+💾 Trabalhe com banco de dados SQLite para persistência dos dados
+
+Funcionalidades principais:
+
+-Interface intuitiva com botões personalizados
+-Exibição em tela cheia (fullscreen)
+-Mensagens de feedback para cada ação (erros ou sucesso)
+-Validação de entrada para evitar erros de tipo
+-Estilização escura (dark mode) para melhor visualização
+-Marca d’água discreta com o nome do autor no canto superior esquerdo
+
+Tecnologias usadas:
+
+Python 3.x
+Tkinter (GUI)
+SQLite (banco de dados local)
