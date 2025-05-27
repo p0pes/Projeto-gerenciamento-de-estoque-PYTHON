@@ -65,31 +65,30 @@ def remover_produto(id_produto):
         print(f"Erro ao remover produto: {e}")
         return False
 
-def alterar_produto(id_produto, novo_nome, nova_quantidade):
+def alterar_nome_produto(id_produto, novo_nome):
     try:
         with sqlite3.connect(DATABASE_NAME) as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT nome, quantidade FROM produtos WHERE id = ?', (id_produto,))
+            cursor.execute('SELECT nome FROM produtos WHERE id = ?', (id_produto,))
             resultado = cursor.fetchone()
 
             if resultado:
-                nome_atual, quantidade_atual = resultado
-
-
+                nome_atual = resultado[0]
+                
                 if not novo_nome.strip():
-                    novo_nome = nome_atual
-                if nova_quantidade is None:
-                    nova_quantidade = quantidade_atual
-
-                cursor.execute('''
-                    UPDATE produtos SET nome = ?, quantidade = ? WHERE id = ?
-                ''', (novo_nome, nova_quantidade, id_produto))
-                conn.commit()
+                    novo_nome = nome_atual 
+                
+                if novo_nome != nome_atual:
+                    cursor.execute('''
+                        UPDATE produtos SET nome = ? WHERE id = ?
+                    ''', (novo_nome, id_produto))
+                    conn.commit()
                 return True
             else:
+                print(f"Erro: Produto com ID {id_produto} não encontrado para alteração de nome.")
                 return False
     except sqlite3.Error as e:
-        print(f"Erro ao alterar produto: {e}")
+        print(f"Erro ao alterar nome do produto ID {id_produto}: {e}")
         return False
 
 def registrar_movimentacao(id_produto, entrada=0, saida=0):
@@ -100,12 +99,18 @@ def registrar_movimentacao(id_produto, entrada=0, saida=0):
             resultado = cursor.fetchone()
 
             if not resultado:
+                print(f"Erro: Produto com ID {id_produto} não encontrado para registrar movimentação.")
                 return False
 
             quantidade_atual, entradas_atuais, saidas_atuais = resultado
 
-            nova_quantidade = quantidade_atual + entrada - saida
-            if nova_quantidade < 0:
+            if entrada < 0 or saida < 0:
+                print(f"Erro: Valores de entrada ou saída não podem ser negativos para o produto ID {id_produto}.")
+                return False
+
+            nova_quantidade_calculada = quantidade_atual + entrada - saida
+            if nova_quantidade_calculada < 0:
+                print(f"Erro: Movimentação resultaria em quantidade negativa para o produto ID {id_produto}.")
                 return False
 
             novo_total_entradas = entradas_atuais + entrada
@@ -115,14 +120,12 @@ def registrar_movimentacao(id_produto, entrada=0, saida=0):
                 UPDATE produtos
                 SET quantidade = ?, entradas = ?, saidas = ?
                 WHERE id = ?
-            ''', (nova_quantidade, novo_total_entradas, novo_total_saidas, id_produto))
+            ''', (nova_quantidade_calculada, novo_total_entradas, novo_total_saidas, id_produto))
             conn.commit()
             return True
     except sqlite3.Error as e:
-        print(f"Erro ao registrar movimentação: {e}")
+        print(f"Erro ao registrar movimentação para o produto ID {id_produto}: {e}")
         return False
-
-
 
 if __name__ == "__main__":
     inicializar_banco()

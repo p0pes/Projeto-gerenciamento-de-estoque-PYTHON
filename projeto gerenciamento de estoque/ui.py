@@ -5,7 +5,8 @@ from database import (
     adicionar_produto,
     listar_produtos,
     remover_produto,
-    alterar_produto
+    alterar_nome_produto,
+    registrar_movimentacao
 )
 
 class AplicacaoEstoque:
@@ -32,6 +33,7 @@ class AplicacaoEstoque:
         }
 
         self.selected_product_id_for_edit = None
+        self.original_product_name_for_edit = None
 
         self.inicializar_banco()
         self.criar_widgets()
@@ -303,9 +305,8 @@ class AplicacaoEstoque:
         
         item_values = self.tree.item(selected_item[0], 'values')
         self.selected_product_id_for_edit = int(item_values[0])
-        current_name = item_values[1]
-        current_quantity = item_values[2]
-
+        self.original_product_name_for_edit = item_values[1]
+        
         self.tela_editar = tk.Toplevel(self.root)
         self.tela_editar.title("Editar Produto")
         self.tela_editar.config(bg="#2e2e2e")
@@ -313,7 +314,7 @@ class AplicacaoEstoque:
         self.tela_editar.grab_set()
         self.tela_editar.resizable(False, False)
 
-        dialog_width, dialog_height = 400, 300
+        dialog_width, dialog_height = 400, 380 
         self._center_toplevel(self.tela_editar, dialog_width, dialog_height)
 
         frame = tk.Frame(self.tela_editar, bg="#2e2e2e")
@@ -324,12 +325,17 @@ class AplicacaoEstoque:
         tk.Label(frame, text="Nome:", **self.label_style_dialog).pack(pady=(10,0), anchor="w", fill='x')
         self.entry_nome_editar = tk.Entry(frame, **self.entry_style)
         self.entry_nome_editar.pack(pady=(0,10), fill="x")
-        self.entry_nome_editar.insert(0, current_name)
+        self.entry_nome_editar.insert(0, self.original_product_name_for_edit)
 
-        tk.Label(frame, text="Quantidade Total:", **self.label_style_dialog).pack(pady=(5,0), anchor="w", fill='x')
-        self.entry_quantidade_editar = tk.Entry(frame, **self.entry_style)
-        self.entry_quantidade_editar.pack(pady=(0,15), fill="x")
-        self.entry_quantidade_editar.insert(0, current_quantity)
+        tk.Label(frame, text="Adicionar Quantidade (Entrada):", **self.label_style_dialog).pack(pady=(5,0), anchor="w", fill='x')
+        self.entry_adicionar_quantidade_editar = tk.Entry(frame, **self.entry_style)
+        self.entry_adicionar_quantidade_editar.pack(pady=(0,10), fill="x")
+        self.entry_adicionar_quantidade_editar.insert(0, "0")
+
+        tk.Label(frame, text="Subtrair Quantidade (Saída):", **self.label_style_dialog).pack(pady=(5,0), anchor="w", fill='x')
+        self.entry_subtrair_quantidade_editar = tk.Entry(frame, **self.entry_style)
+        self.entry_subtrair_quantidade_editar.pack(pady=(0,15), fill="x")
+        self.entry_subtrair_quantidade_editar.insert(0, "0")
 
         self._create_styled_button(
             frame, "Salvar Alterações", self.salvar_produto_editado,
@@ -340,44 +346,86 @@ class AplicacaoEstoque:
         self.entry_nome_editar.focus()
 
     def salvar_produto_editado(self):
+        if self.selected_product_id_for_edit is None:
+            return
+
         try:
             id_produto = self.selected_product_id_for_edit
             novo_nome = self.entry_nome_editar.get().strip()
-            nova_quantidade_str = self.entry_quantidade_editar.get().strip()
+            
+            qtd_adicionar_str = self.entry_adicionar_quantidade_editar.get().strip()
+            qtd_subtrair_str = self.entry_subtrair_quantidade_editar.get().strip()
 
-            if not novo_nome or not nova_quantidade_str:
-                self.update_feedback_message("Nome e Quantidade são obrigatórios.", "orange")
+            if not novo_nome:
+                self.update_feedback_message("O nome do produto não pode ser vazio.", "orange")
                 if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
-                    messagebox.showerror("Erro de Entrada", "Nome e Quantidade são obrigatórios.", parent=self.tela_editar)
+                    messagebox.showerror("Erro de Entrada", "O nome do produto não pode ser vazio.", parent=self.tela_editar)
                 return
             
-            nova_quantidade = int(nova_quantidade_str)
+            qtd_adicionar = 0
+            if qtd_adicionar_str:
+                try:
+                    qtd_adicionar = int(qtd_adicionar_str)
+                    if qtd_adicionar < 0:
+                        raise ValueError("Quantidade a adicionar não pode ser negativa.")
+                except ValueError:
+                    self.update_feedback_message("Quantidade a adicionar deve ser um número inteiro não negativo.", "red")
+                    if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
+                        messagebox.showerror("Erro de Entrada", "Quantidade a adicionar deve ser um número inteiro não negativo.", parent=self.tela_editar)
+                    return
 
-            if nova_quantidade < 0:
-                self.update_feedback_message("Quantidade não pode ser negativa.", "orange")
-                if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
-                    messagebox.showerror("Erro de Entrada", "Quantidade não pode ser negativa.", parent=self.tela_editar)
-                return
+            qtd_subtrair = 0
+            if qtd_subtrair_str:
+                try:
+                    qtd_subtrair = int(qtd_subtrair_str)
+                    if qtd_subtrair < 0:
+                        raise ValueError("Quantidade a subtrair não pode ser negativa.")
+                except ValueError:
+                    self.update_feedback_message("Quantidade a subtrair deve ser um número inteiro não negativo.", "red")
+                    if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
+                        messagebox.showerror("Erro de Entrada", "Quantidade a subtrair deve ser um número inteiro não negativo.", parent=self.tela_editar)
+                    return
 
-            if alterar_produto(id_produto, novo_nome, nova_quantidade):
+            nome_alterado_sucesso = True
+            if novo_nome != self.original_product_name_for_edit:
+                if not alterar_nome_produto(id_produto, novo_nome):
+                    self.update_feedback_message(f"Falha ao alterar nome do produto ID {id_produto}.", "red")
+                    if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
+                        messagebox.showerror("Erro no Banco", f"Falha ao alterar nome do produto ID {id_produto}.", parent=self.tela_editar)
+                    nome_alterado_sucesso = False
+                else:
+                    nome_alterado_sucesso = True
+            
+            movimentacao_sucesso = True
+            if qtd_adicionar > 0 or qtd_subtrair > 0:
+                if not registrar_movimentacao(id_produto, entrada=qtd_adicionar, saida=qtd_subtrair):
+                    self.update_feedback_message(f"Falha ao registrar movimentação para o produto ID {id_produto}.", "red")
+                    if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
+                        messagebox.showerror("Erro no Banco", f"Falha ao registrar movimentação para o produto ID {id_produto}. Verifique o console para detalhes.", parent=self.tela_editar)
+                    movimentacao_sucesso = False
+                else:
+                    movimentacao_sucesso = True
+            
+            if nome_alterado_sucesso and movimentacao_sucesso:
                 self.update_feedback_message(f"Produto ID {id_produto} alterado com sucesso.", "green")
                 self.atualizar_lista_produtos()
                 if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
                     self.tela_editar.destroy()
-            else:
-                self.update_feedback_message(f"Falha ao alterar produto ID {id_produto}.", "red")
-                if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
-                    messagebox.showerror("Erro no Banco", f"Falha ao alterar produto ID {id_produto}.", parent=self.tela_editar)
-        except ValueError:
-            self.update_feedback_message("Quantidade deve ser um número inteiro.", "red")
-            if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
-                messagebox.showerror("Erro de Entrada", "Quantidade deve ser um número inteiro.", parent=self.tela_editar)
+            elif not nome_alterado_sucesso and not movimentacao_sucesso:
+                 self.update_feedback_message(f"Falha ao alterar nome e registrar movimentação para o produto ID {id_produto}.", "red")
+            elif not nome_alterado_sucesso :
+                 self.update_feedback_message(f"Falha ao alterar nome do produto ID {id_produto}, mas movimentação (se houver) pode ter ocorrido ou falhado.", "orange")
+            elif not movimentacao_sucesso:
+                 self.update_feedback_message(f"Nome alterado (se aplicável), mas falha ao registrar movimentação para o produto ID {id_produto}.", "orange")
+
+
         except Exception as e:
             self.update_feedback_message(f"Erro inesperado: {e}", "red")
             if hasattr(self, 'tela_editar') and self.tela_editar.winfo_exists():
                 messagebox.showerror("Erro", f"Ocorreu um erro: {e}", parent=self.tela_editar)
         finally:
             self.selected_product_id_for_edit = None
+            self.original_product_name_for_edit = None
 
 if __name__ == "__main__":
     root = tk.Tk()
